@@ -23,7 +23,10 @@ observer.observe({ type: 'longtask', buffered: true });
 const processInChunks = async (items, chunkSize, processItem, signal) => {
     for (let i = 0; i < items.length; i += chunkSize) {
         // 检查是否中断
-        if (signal?.aborted) return;
+        if (signal?.aborted) {
+            console.log('任务被中断');
+            return;
+        }
 
         const end = Math.min(i + chunkSize, items.length);
         for (let j = i; j < end; j++) {
@@ -42,4 +45,15 @@ const yieldToMain = () => {
     }
 
     return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// 3. 可中断的分片处理 - 使用
+const controller = new AbortController();
+
+// 开始处理
+processInChunks(bigArray, 5000, item => compute(item), controller.signal);
+
+//. 点击取消
+document.getElementById('cancel').onclick = () => {
+    controller.abort();
 }

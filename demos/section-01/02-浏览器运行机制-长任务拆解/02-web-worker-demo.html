@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <button onclick="startCompute()">开始计算（Worker）</button>
+    <button onclick="alert('我还能响应！')">测试是否卡顿</button>
+
+    <!-- 加载 Worker 脚本 -->
+    <!-- <script src="./worker.js"></script> -->
+
+    <script>
+        // 将 Worker 代码定义为字符串
+        const workerCode = `
+            self.onmessage = (e) => {
+                const { type, data } = e.data;
+                console.log(data.size)
+                if (type === 'compute') {
+                    // 模拟重计算
+                    const result = new Float32Array(data.size);
+                    for (let i = 0; i < data.size; i++) {
+                        result[i] = Math.sqrt(i) * Math.sin(i);
+                    }
+                    // 把结果转移回主线程（零拷贝）
+                    self.postMessage({ type: 'result', data: result }, [result.buffer]);
+                }
+            };
+        `;
+
+        // 创建 Blob URL
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+
+        // 使用这个 URL 创建 Worker
+        const worker = new Worker(workerUrl);
+        // const worker = new Worker('./worker.js');
+
+        worker.onmessage = (e) => {
+            if (e.data.type === 'result') {
+                console.log('计算完成，前5个结果:', e.data.data.slice(0, 5));
+            }
+        };
+
+        function startCompute() {
+            // worker.postMessage({ type: 'compute', data: { size: 10_000_000_000 } });
+            worker.postMessage({ type: 'compute', data: { size: 100_000_000 } });
+        }
+    </script>
+</body>
+
+</html>
