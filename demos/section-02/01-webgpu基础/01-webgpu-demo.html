@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <canvas></canvas>
+    <script type="module">
+        const main = async () => {
+            const adapter = await navigator.gpu?.requestAdapter();  //. 适配器
+            const device = await adapter?.requestDevice();  //. d
+            if (!device) {
+                fail('need a browser that supports WebGPU');
+                return;
+            }
+
+            // 从画布获取 WebGPU 上下文并配置它
+            const canvas = document.querySelector('canvas');
+            const context = canvas.getContext('webgpu');
+            const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device,
+                format: presentationFormat
+            });
+
+            //. 创建着色器模块（顶点着色器 和 片段着色器）
+            const module = device.createShaderModule({
+                label: 'our hardcoded red triangle shaders',
+                code: /* wgsl */ `
+                @vertex fn vs(
+                    @builtin(vertex_index) vertexIndex: u32
+                ) -> @builtin(position) vec4f {
+                    let pos = array(
+                        vec2f(0.0, 0.5),
+                        vec2f(-0.5, -0.5),
+                        vec2f(0.5, -0.5)
+                    );
+
+                    return vec4f(pos[vertexIndex], 0.0, 1.0);
+                }
+                
+                @fragment fn fs() -> @location(0) vec4f {
+                    return vec4f(1.0, 0.0, 0.0, 1.0);
+                }
+            `
+            })
+
+            //. 创建渲染管道
+            const pipeline = device.createRenderPipeline({
+                label: 'our hardcoded red triangle pipeline',
+                layout: 'auto',     //. 意味着要求 WebGPU 从着色器中推断出数据布局。
+                vertex: {
+                    module,
+                    entryPoint: 'vs',
+                },
+                fragment: {
+                    module,
+                    entryPoint: 'fs',
+                    targets: [{ format: presentationFormat }]
+                }
+            })
+
+            //. 渲染纹理
+            const renderPassDescriptor = {
+                label: 'our basic canvas renderPass',
+                colorAttachments: [
+                    {
+                        clearValue: [0.3, 0.3, 0.3, 1],
+                        loadOp: 'clear',    //. 指定在绘制前将纹理清除为clearValue
+                        storeOp: 'store'    //. 表示存储绘制结果
+                    }
+                ]
+            };
+
+            const render = () => {
+                //. 从当前画布上下文获取纹理并设置为目标纹理
+                renderPassDescriptor.colorAttachments[0].view = context
+                    .getCurrentTexture()
+                    .createView();
+
+                //. 创建命令编码器以开始编码命令
+                const encoder = device.createCommandEncoder({ label: 'our encoder' });
+
+                //. 创建一个 render pass 编码器来编码特定的命令
+                const pass = encoder.beginRenderPass(renderPassDescriptor);
+                pass.setPipeline(pipeline);
+                pass.draw(3);   //. 3次调用顶点着色器
+                pass.end();
+
+                const commandBuffer = encoder.finish();
+                device.queue.submit([commandBuffer]);
+            }
+
+            render();
+        };
+
+        const fail = (msg) => {
+            alert(msg);
+        };
+
+        main();
+
+    </script>
+</body>
+
+</html>
